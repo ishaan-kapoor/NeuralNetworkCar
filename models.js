@@ -11,6 +11,7 @@ class Car {
         this.diagonal = Math.sqrt(this.height**2 + this.width**2);
 
         this.angle = 0;
+        this.angleChange = 0.005;
         this.speed = 0
         this.friction = 0.02;
         this.acceleration = 0.1;
@@ -18,8 +19,20 @@ class Car {
         this.maxReverseSpeed = 2;
 
         this.getCorners();
+        this.getCarBorders();
 
         this.controls = new Controls();
+        this.sensor = new Sensor(this, 30, 200, 3.14)
+    }
+
+    getCarBorders() {
+        this.borders = [];
+        for (let i=0; i<4; i++) {
+            let start = {x: this.corner_x[i] + this.x, y: this.corner_y[i] + this.y};
+            let j = (i+1)%4;
+            let end = {x: this.corner_x[j] + this.x, y: this.corner_y[j] + this.y};
+            this.borders.push([start, end])
+        }
     }
 
     getCorners() {
@@ -32,7 +45,8 @@ class Car {
         this.max_y = Math.max(...this.corner_y);
     }
 
-    update() { this.#move(); }
+    update(trackBorders) { this.sensor.update(trackBorders); this.#move(); this.getCorners(); this.getCarBorders(); this.#checkCollision(trackBorders); }
+    
     #move() {
         if (this.controls.forward) { this.speed -= this.acceleration; }
         if (this.controls.reverse) { this.speed += this.acceleration; }
@@ -47,8 +61,8 @@ class Car {
         
         if (this.speed != 0) {
             const reverse_flip = this.speed > 0 ? 1 : -1;
-            if (this.controls.left)  { this.angle -= 0.01*reverse_flip; }
-            if (this.controls.right) { this.angle += 0.01*reverse_flip; }
+            if (this.controls.left)  { this.angle -= this.angleChange*reverse_flip; }
+            if (this.controls.right) { this.angle += this.angleChange*reverse_flip; }
             if (this.angle > Math.PI) { this.angle -= 2*Math.PI; }
             if (this.angle < Math.PI) { this.angle += 2*Math.PI; }
         }
@@ -56,13 +70,22 @@ class Car {
         this.y += this.speed * Math.cos(this.angle);
         this.x += this.speed * Math.sin(this.angle);
 
-        this.getCorners()
-
-        if (this.x+this.max_x >= canvas.width) { this.x = canvas.width-this.max_x; this.speed = 0; console.log('hit right'); }
-        if (this.x+this.min_x < 0) { this.x = -this.min_x; this.speed = 0; console.log('hit left'); }
-        if (this.y+this.max_y > canvas.height) { this.y = canvas.height - this.max_y; this.speed = 0; console.log('hit down'); }
-        if (this.y+this.min_y < 0) { this.y = -this.min_y; this.speed = 0; console.log('hit up'); }
     }
+    
+    #checkCollision(trackBorders) {
+        trackBorders.forEach(element => {
+            this.borders.forEach(border => {
+                const collision = getIntersection(border, element);
+                if (collision != null) {
+                    // this.speed = 0;
+                    // console.log("Collosion at: ", collision);
+                    console.log("Collosion!");
+                }
+            });
+        });
+
+    }
+
 
     draw(context) {
         context.save()
@@ -73,16 +96,16 @@ class Car {
         const rect_start_y = -this.height / 2;
         context.fillRect(rect_start_x, rect_start_y, this.width, this.height);
         context.fillTrian
-        // context.restore();
-        
-        context.beginPath();
-        context.fillStyle = this.secondaryColor;
-        context.moveTo(0, -this.height/2);
-        context.lineTo(-this.width/2, 0);
-        context.lineTo(+this.width/2, 0);
-        context.closePath();
-        context.fill();
         context.restore();
+        
+        // context.beginPath();
+        // context.fillStyle = this.secondaryColor;
+        // context.moveTo(0, -this.height/2);
+        // context.lineTo(-this.width/2, 0);
+        // context.lineTo(+this.width/2, 0);
+        // context.closePath();
+        // context.fill();
+        // context.restore();
         
         for (let i = 0; i < 4; i++) {
             context.beginPath();
@@ -90,6 +113,8 @@ class Car {
             context.fillStyle = this.secondaryColor;
             context.fill();
         }
+
+        this.sensor.draw(context);
     }
 }
 
@@ -124,18 +149,29 @@ class Controls {
 }
 
 class Track {
-    constructor(x, width, laneCount=3, color='white', top=0, bottom=canvas.height) {
+    constructor(x, width, laneCount=3, color='white', top=-100000, bottom=canvas.height+1000) {
         this.x = x;
         this.width = width;
         this.laneCount = laneCount;
         this.color = color;
 
-        // this.infinity = 1000
         this.laneWidth = this.width / this.laneCount;
         this.left = this.x - this.width / 2;
         this.right = this.x + this.width / 2;
         this.top = top;
         this.bottom = bottom;
+
+        this.topLeft = {x: this.left, y: this.top};
+        this.topRight = {x: this.right,y:  this.top};
+        this.bottomLeft = {x: this.left, y: this.bottom};
+        this.bottomRight = {x: this.right,y:  this.bottom};
+
+        this.borders = [
+            [this.topLeft, this.topRight],
+            [this.topRight, this.bottomRight],
+            [this.bottomRight, this.bottomLeft],
+            [this.bottomLeft, this.topLeft],
+        ];
     }
 
     getLane(x) {
@@ -162,15 +198,95 @@ class Track {
         }
 
         context.setLineDash([]);
-        context.beginPath();
-        context.moveTo(this.left, this.top);
-        context.lineTo(this.left, this.bottom);
-        context.stroke();
-        context.beginPath();
-        context.moveTo(this.right, this.top);
-        context.lineTo(this.right, this.bottom);
-        context.stroke();
+        this.borders.forEach((border) => {
+            context.beginPath();
+            context.moveTo(border[0].x, border[0].y);
+            context.lineTo(border[1].x, border[1].y);
+            context.stroke();
+        });
 
+        for (let i = 0; i < this.laneCount; i++) {
+            const text = "Lane: "+(1+i);
+            const text_width = context.measureText(text).width;
+            context.fillText("Lane: "+(1+i), this.getLaneCenter(i)-text_width/2, canvas.height*0);
+        }
 
     }
+}
+
+class Sensor {
+    constructor(car, rayCount=3, rayLength=100, raySpread=Math.PI/4, color='yellow', secondaryColor='red', lineWidth=2) {
+        this.car = car;
+        this.rayCount = rayCount;
+        this.rayLength = rayLength;
+        this.raySpread = raySpread;
+        this.color = color;
+        this.secondaryColor = secondaryColor;
+        this.lineWidth = lineWidth;
+        this.rays = [];
+        this.readings = [];
+    }
+
+    update(trackBorders) {
+        this.#castRays();
+        this.readings = [];
+        this.rays.forEach((ray) => {
+            this.readings.push(this.#getReadings(ray, trackBorders))
+            // let reading = this.#getReadings(ray, trackBorders);
+            // if (reading) { console.log(reading); }
+            // this.readings.push(reading);
+        });
+    }
+
+    #getReadings(ray, trackBorders) {
+        const intersections = [];
+        trackBorders.forEach((border) => {
+            const intersection = getIntersection(ray, border);
+            if (intersection) {
+                intersections.push(intersection);
+            }
+        });
+        if (intersections.length == 0) { return null; }
+        return intersections.sort((prev, curr) => {
+            return (prev[2] > curr[2]) - (prev[2] < curr[2]);
+        });
+        // return intersections.sort((prev, curr) => {
+        //     const prev_distance = distance(ray[0], prev);
+        //     const curr_distance = distance(ray[0], curr);
+        //     return (prev_distance < curr_distance) ? prev : curr;
+        // });
+    }
+
+
+    #castRays() {
+        this.rays = [];
+        for (let i = 0; i < this.rayCount; i++) {
+            const angle = this.car.angle + leniar_interpolation(-this.raySpread / 2, this.raySpread / 2, ((this.rayCount == 1) ? 0.5 : (i / (this.rayCount - 1))));
+            const start = { x: this.car.x, y: this.car.y };
+            const end = { x: this.car.x - this.rayLength * Math.sin(angle), y: this.car.y - this.rayLength * Math.cos(angle) };
+            this.rays.push([start, end, angle]);
+        }
+    }
+
+    draw(context) {
+        context.lineWidth = this.lineWidth;
+        for (let i = 0; i < this.rays.length; i++) {
+            const ray = this.rays[i];
+            let end;
+            if (this.readings[i] == null) { end = [ray[1].x, ray[1].y]; }
+            else { end = [this.readings[i][0].x, this.readings[i][0].y]; }
+            context.strokeStyle = this.color;
+            context.beginPath();
+            context.moveTo(ray[0].x, ray[0].y);
+            context.lineTo(...end);
+            context.stroke();
+            
+            context.strokeStyle = this.secondaryColor;
+            context.beginPath();
+            context.moveTo(ray[1].x, ray[1].y);
+            context.lineTo(...end);
+            context.stroke();
+        }
+    }
+
 }
