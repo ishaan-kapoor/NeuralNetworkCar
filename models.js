@@ -1,6 +1,6 @@
 
 class Car {
-    constructor(x, y, width, height, userControlled=false, color='black', secondaryColor='red', maxSpeed=5, maxReverseSpeed=2, angle=0) {
+    constructor(x, y, width, height, dummy=false, AI=false, color='black', secondaryColor='red', maxSpeed=5, maxReverseSpeed=2, angle=0) {
         this.x = x;
         this.y = y;
         this.height = height;
@@ -10,7 +10,8 @@ class Car {
         this.diag_angle = Math.atan(this.height/this.width);
         this.diagonal = Math.sqrt(this.height**2 + this.width**2);
 
-        this.userControlled = userControlled;
+        this.dummy = dummy;
+        this.AI = (!dummy) && AI;
         this.angle = angle;
         this.angleChange = 0.005;
         this.speed = 0
@@ -23,8 +24,16 @@ class Car {
         this.getCorners();
         this.getCarBorders();
 
-        this.controls = new Controls(userControlled);
-        if (userControlled) { this.sensor = new Sensor(this, 30, 200, 3.14) }
+        if (!AI) {
+            this.controls = new Controls(!dummy);
+        } else {
+            this.controls = {forward: false, reverse: false, left: false, right: false};
+        }
+        if (!dummy) {
+            // this.sensor = new Sensor(this, 30, 200, 3.14)
+            this.sensor = new Sensor(this)
+            this.brain = new NeuralNetwork([this.sensor.rayCount, 2, 4]);
+        }
     }
 
     getCarBorders() {
@@ -49,8 +58,20 @@ class Car {
 
 
     update(collision_objects) {
-        if (this.sensor) { this.sensor.update(collision_objects); }
         if (this.damaged) { return; }
+        if (this.sensor) {
+            this.sensor.update(collision_objects);
+            const offsets = this.sensor.readings.map(reading => reading==null?0:1-reading[0].offset);
+            if (offsets.length != this.sensor.rayCount) { console.log("Sensor error"); return; }
+            const outputs = NeuralNetwork.feedForward(this.brain, offsets);
+            // console.log(outputs);
+            if (this.AI) {
+                this.controls.forward = outputs[0];
+                this.controls.left = outputs[1];
+                this.controls.right = outputs[2];
+                this.controls.reverse = outputs[3];
+            }
+        }
         this.#move();
         this.getCorners();
         this.getCarBorders();
@@ -241,7 +262,7 @@ class Sensor {
     #castRays() {
         this.rays = [];
         for (let i = 0; i < this.rayCount; i++) {
-            const angle = this.car.angle + leniar_interpolation(-this.raySpread / 2, this.raySpread / 2, ((this.rayCount == 1) ? 0.5 : (i / (this.rayCount - 1))));
+            const angle = this.car.angle + leniar_interpolation(this.raySpread / 2, -this.raySpread / 2, (i / (this.rayCount - 1)));
             const start = { x: this.car.x, y: this.car.y };
             const end = { x: this.car.x - this.rayLength * Math.sin(angle), y: this.car.y - this.rayLength * Math.cos(angle) };
             this.rays.push([start, end, angle]);
@@ -273,7 +294,7 @@ class Sensor {
 }
 
 class Track {
-    constructor(x, width, laneCount=3, color='white', top=-2*(10**4), bottom=canvas.height+100) {
+    constructor(x, width, laneCount=3, color='white', top=-2*(10**4), bottom=500) {
         this.x = x;
         this.width = width;
         this.laneCount = laneCount;
@@ -290,18 +311,14 @@ class Track {
         this.bottomLeft = {x: this.left, y: this.bottom};
         this.bottomRight = {x: this.right,y:  this.bottom};
 
-        // this.borders = [
-        //     [this.topLeft, this.topRight],
-        //     [this.topRight, this.bottomRight],
-        //     [this.bottomRight, this.bottomLeft],
-        //     [this.bottomLeft, this.topLeft],
-        // ];
+        this.#makeBorders()
+    }
 
-        let right_curve_start = {x: this.right+70, y: leniar_interpolation(this.top, this.bottom, 0.75)};
-        let left_curve_start = {x: this.left+70, y: leniar_interpolation(this.top, this.bottom, 0.75)};
-        let left_curve_end = {x: this.left-70, y: leniar_interpolation(this.top, this.bottom, 0.95)};
-        let right_curve_end = {x: this.right-70, y: leniar_interpolation(this.top, this.bottom, 0.95)};
-
+    #makeBorders() {
+        // let right_curve_start = {x: this.right+70, y: leniar_interpolation(this.top, this.bottom, 0.75)};
+        // let left_curve_start = {x: this.left+70, y: leniar_interpolation(this.top, this.bottom, 0.75)};
+        // let left_curve_end = {x: this.left-70, y: leniar_interpolation(this.top, this.bottom, 0.95)};
+        // let right_curve_end = {x: this.right-70, y: leniar_interpolation(this.top, this.bottom, 0.95)};
 
         this.borders = [
             // ! assumptions:
@@ -311,19 +328,21 @@ class Track {
             // * 1st 2 entries are the top and bottom borders
             [this.topLeft, this.topRight],
             [this.bottomRight, this.bottomLeft],
-            [this.topRight, right_curve_start],
-            [this.topLeft, left_curve_start],
-            // [this.bottomRight, right_curve_end],
-            // [this.bottomLeft, left_curve_end],
+            // [this.topRight, right_curve_start],
+            // [this.topLeft, left_curve_start],
+            [this.topRight, this.bottomRight],
+            [this.bottomLeft, this.topLeft],
         ];
 
-        left_curve_end = this.#makeCurveBorders(left_curve_start, left_curve_end);
-        right_curve_end = {x: left_curve_end.x+this.width, y: left_curve_end.y};
+        // left_curve_end = this.#makeCurveBorders(left_curve_start, left_curve_end);
+        // right_curve_end = {x: left_curve_end.x+this.width, y: left_curve_end.y};
 
         // this.borders.push([right_curve_end, right_curve_start]);
         // this.borders.push([left_curve_start, left_curve_end]);
-        this.borders.push([right_curve_end, this.bottomRight]);
-        this.borders.push([this.bottomLeft, left_curve_end]);
+
+        // this.borders.push([right_curve_end, this.bottomRight]);
+        // this.borders.push([this.bottomLeft, left_curve_end]);
+
 
         // ! This corrects the order of points in borders
         // * Left Border comes before Right Border
@@ -343,6 +362,7 @@ class Track {
                 // Left, Right
             }
         }
+
     }
 
     #makeCurveBorders(start, end, scale={x:60,y:300}, step=20) {
@@ -386,7 +406,7 @@ class Track {
         context.lineWidth = 5;
         context.strokeStyle = this.color;
 
-        context.setLineDash([2, 20]);
+        context.setLineDash([20, 20]);
         for (let j = 2; j < this.borders.length; j+=2) {
             for (let i = 1; i < this.laneCount; i++) {
                 const top_x = leniar_interpolation(this.borders[j][0].x, this.borders[j+1][0].x, i/this.laneCount);

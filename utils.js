@@ -1,4 +1,5 @@
 function leniar_interpolation(start, end, percent) {
+    if (percent == Infinity) { percent = 0.5; }
     return (1-percent)*start + percent*end;
 }
 
@@ -134,7 +135,7 @@ function getIntersection(line1,line2){
 }
 
 function intersecting_polygons(lines1, lines2) {
-    intersections = [];
+    const intersections = [];
     for (let i = 0; i < lines1.length; i++) {
         for (let j = 0; j < lines2.length; j++) {
             const intersection = getIntersection(lines1[i], lines2[j]);
