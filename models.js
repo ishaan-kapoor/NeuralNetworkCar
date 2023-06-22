@@ -1,6 +1,6 @@
 
 class Car {
-    constructor(x, y, width, height, color='black', secondaryColor='red') {
+    constructor(x, y, width, height, userControlled=false, color='black', secondaryColor='red', maxSpeed=5, maxReverseSpeed=2, angle=0) {
         this.x = x;
         this.y = y;
         this.height = height;
@@ -10,19 +10,21 @@ class Car {
         this.diag_angle = Math.atan(this.height/this.width);
         this.diagonal = Math.sqrt(this.height**2 + this.width**2);
 
-        this.angle = 0;
+        this.userControlled = userControlled;
+        this.angle = angle;
         this.angleChange = 0.005;
         this.speed = 0
         this.friction = 0.02;
         this.acceleration = 0.1;
-        this.maxSpeed = 5;
-        this.maxReverseSpeed = 2;
+        this.maxSpeed = maxSpeed;
+        this.maxReverseSpeed = maxReverseSpeed;
+        this.damaged = false;
 
         this.getCorners();
         this.getCarBorders();
 
-        this.controls = new Controls();
-        this.sensor = new Sensor(this, 30, 200, 3.14)
+        this.controls = new Controls(userControlled);
+        if (userControlled) { this.sensor = new Sensor(this, 30, 200, 3.14) }
     }
 
     getCarBorders() {
@@ -45,7 +47,15 @@ class Car {
         this.max_y = Math.max(...this.corner_y);
     }
 
-    update(trackBorders) { this.sensor.update(trackBorders); this.#move(); this.getCorners(); this.getCarBorders(); this.#checkCollision(trackBorders); }
+
+    update(collision_objects) {
+        if (this.sensor) { this.sensor.update(collision_objects); }
+        if (this.damaged) { return; }
+        this.#move();
+        this.getCorners();
+        this.getCarBorders();
+        this.#checkCollision(collision_objects);
+    }
     
     #move() {
         if (this.controls.forward) { this.speed -= this.acceleration; }
@@ -72,40 +82,51 @@ class Car {
 
     }
     
-    #checkCollision(trackBorders) {
-        trackBorders.forEach(element => {
-            this.borders.forEach(border => {
-                const collision = getIntersection(border, element);
-                if (collision != null) {
-                    // this.speed = 0;
-                    // console.log("Collosion at: ", collision);
-                    console.log("Collosion!");
-                }
-            });
-        });
+    #checkCollision(collision_objects) {
+        // trackBorders.forEach(element => {
+        //     this.borders.forEach(border => {
+        //         const collision = getIntersection(border, element);
+        //         if (collision != null) {
+        //             // this.speed = 0;
+        //             // console.log("Collosion at: ", collision);
+        //             this.secondaryColor = this.color;
+        //             this.color = 'red';
+        //             console.log("Collosion!");
+        //             this.damaged = true;
+        //         }
+        //     });
+        // });
+        for (let i=0; i<collision_objects.length; i++) {
+            const collision = intersecting_polygons(this.borders, collision_objects[i]);
+            if (collision != null) {
+                this.secondaryColor = this.color;
+                this.color = 'red';
+                console.log("Collosion!");
+                this.damaged = true;
+            }
+        }
 
     }
 
-
     draw(context) {
-        context.save()
-        context.translate(this.x, this.y);
-        context.rotate(-this.angle);
-        context.fillStyle = this.color;
-        const rect_start_x = -this.width / 2;
-        const rect_start_y = -this.height / 2;
-        context.fillRect(rect_start_x, rect_start_y, this.width, this.height);
-        context.fillTrian
-        context.restore();
-        
-        // context.beginPath();
-        // context.fillStyle = this.secondaryColor;
-        // context.moveTo(0, -this.height/2);
-        // context.lineTo(-this.width/2, 0);
-        // context.lineTo(+this.width/2, 0);
-        // context.closePath();
-        // context.fill();
+        // context.save()
+        // context.translate(this.x, this.y);
+        // context.rotate(-this.angle);
+        // context.fillStyle = this.color;
+        // const rect_start_x = -this.width / 2;
+        // const rect_start_y = -this.height / 2;
+        // context.fillRect(rect_start_x, rect_start_y, this.width, this.height);
         // context.restore();
+
+        this.getCorners();
+        context.beginPath();
+        context.fillStyle = this.color;
+        context.moveTo(this.corner_x[0]+this.x, this.corner_y[0]+this.y);
+        for (let i = 0; i < 4; i++) {
+            context.lineTo(this.corner_x[i]+this.x, this.corner_y[i]+this.y);
+        }
+        context.closePath();
+        context.fill();
         
         for (let i = 0; i < 4; i++) {
             context.beginPath();
@@ -114,18 +135,35 @@ class Car {
             context.fill();
         }
 
-        this.sensor.draw(context);
+        if (this.sensor) { this.sensor.draw(context); }
     }
 }
 
 class Controls {
-    constructor() {
+    constructor(userControlled=true) {
         this.left = false;
         this.right = false;
         this.forward = false;
         this.reverse = false;
 
-        this.#setKeyBoardListeners();
+        if (userControlled) {
+            this.#setKeyBoardListeners();
+        } else {
+            this.#setRandomListeners();
+        }
+    }
+
+    #setRandomListeners() {
+        this.left = false;
+        this.right = false;
+        this.forward = false;
+        this.reverse = false;
+        // setInterval(() => {
+        //     this.left = Math.random() > 0.5;
+        //     this.right = !this.left;
+        //     this.forward = Math.random() > 0.5;
+        //     this.reverse = !this.forward;
+        // }, 50);
     }
 
     #setKeyBoardListeners() {
@@ -149,7 +187,7 @@ class Controls {
 }
 
 class Track {
-    constructor(x, width, laneCount=3, color='white', top=-100000, bottom=canvas.height+1000) {
+    constructor(x, width, laneCount=3, color='white', top=-2*(10**5), bottom=canvas.height+100) {
         this.x = x;
         this.width = width;
         this.laneCount = laneCount;
@@ -166,35 +204,92 @@ class Track {
         this.bottomLeft = {x: this.left, y: this.bottom};
         this.bottomRight = {x: this.right,y:  this.bottom};
 
+        // this.borders = [
+        //     [this.topLeft, this.topRight],
+        //     [this.topRight, this.bottomRight],
+        //     [this.bottomRight, this.bottomLeft],
+        //     [this.bottomLeft, this.topLeft],
+        // ];
+
+        let right_inflection = {x: this.right+70, y: (this.bottom+this.top)/2};
+        let left_inflection = {x: this.left+70, y: (this.bottom+this.top)/2};
+
         this.borders = [
+            // ! assumptions:
+            // * all borders are straight lines. i.e. if curves are needed, they are made up of multiple straight lines
+            // * all borders[i] and borders[i+1] are parallel
+            // * borders must have even number of entries
+            // * 1st 2 entries are the top and bottom borders
             [this.topLeft, this.topRight],
-            [this.topRight, this.bottomRight],
             [this.bottomRight, this.bottomLeft],
-            [this.bottomLeft, this.topLeft],
+            [this.topRight, right_inflection],
+            [this.topLeft, left_inflection],
+            [this.bottomRight, right_inflection],
+            [this.bottomLeft, left_inflection],
         ];
+
+        // ! This corrects the order of points in borders
+        // * Left Border comes before Right Border
+        // * Top Point comes before Bottom Point in each Border
+        // * Has no other effect but to maintain order which is usefull in other functions.
+        for (let i=2; i<this.borders.length; i+=2) {
+            if (this.borders[i][0].y > this.borders[i][1].y) {
+                this.borders[i].reverse(); // [Top, Bottom]
+            }
+            if (this.borders[i+1][0].y > this.borders[i+1][1].y) {
+                this.borders[i+1].reverse(); // [Top, Bottom]
+            }
+            if (this.borders[i][0].x > this.borders[i+1][0].x) {
+                let tmp = this.borders[i];
+                this.borders[i] = this.borders[i+1];
+                this.borders[i+1] = tmp;
+                // Left, Right
+            }
+        }
     }
 
-    getLane(x) {
-        return Math.floor((x-this.left)/this.laneWidth);
-    }
-
-    getLaneCenter(lane) {
-        lane = Math.max(0, lane);
+    getLaneCenter(lane, y=0) {
         lane = Math.min(this.laneCount-1, lane);
-        return leniar_interpolation(this.left, this.right, (lane+0.5)/this.laneCount);
+        lane = Math.max(0, lane);
+
+        for (let i=2; i<this.borders.length; i+=2) {
+
+            let angle = - Math.atan((this.borders[i][1].y-this.borders[i][0].y)/(this.borders[i][1].x-this.borders[i][0].x));
+            if (angle < 0) { angle += Math.PI/2; }
+            else { angle -= Math.PI/2; }
+            const top_x = leniar_interpolation(this.borders[i][0].x, this.borders[i+1][0].x, (lane+0.5)/this.laneCount);
+            const bottom_x = leniar_interpolation(this.borders[i][1].x, this.borders[i+1][1].x, (lane+0.5)/this.laneCount);
+            const top_y = this.borders[i][0].y;
+            const bottom_y = this.borders[i][1].y;
+            
+            if ((top_y <= y) && (y <= bottom_y)) {
+                return {
+                    x: ((y - bottom_y)*(top_x - bottom_x)/(top_y - bottom_y)) + bottom_x,
+                    angle: angle
+                }
+            }
+        }
+
+        return {x: leniar_interpolation(this.left, this.right, (lane+0.5)/this.laneCount), angle: 0};
     }
 
     draw(context) {
         context.lineWidth = 5;
         context.strokeStyle = this.color;
 
-        for (let i = 1; i < this.laneCount; i++) {
-            const x = leniar_interpolation(this.left, this.right, i/this.laneCount);
-            context.beginPath();
-            context.setLineDash([25, 15]);
-            context.moveTo(x, this.top);
-            context.lineTo(x, this.bottom);
-            context.stroke();
+        context.setLineDash([25, 15]);
+        for (let j = 2; j < this.borders.length; j+=2) {
+            for (let i = 1; i < this.laneCount; i++) {
+                const top_x = leniar_interpolation(this.borders[j][0].x, this.borders[j+1][0].x, i/this.laneCount);
+                const bottom_x = leniar_interpolation(this.borders[j][1].x, this.borders[j+1][1].x, i/this.laneCount);
+                const top_y = this.borders[j][0].y;
+                const bottom_y = this.borders[j][1].y;
+
+                context.beginPath();
+                context.moveTo(top_x, top_y);
+                context.lineTo(bottom_x, bottom_y);
+                context.stroke();
+            }
         }
 
         context.setLineDash([]);
@@ -205,11 +300,11 @@ class Track {
             context.stroke();
         });
 
-        for (let i = 0; i < this.laneCount; i++) {
-            const text = "Lane: "+(1+i);
-            const text_width = context.measureText(text).width;
-            context.fillText("Lane: "+(1+i), this.getLaneCenter(i)-text_width/2, canvas.height*0);
-        }
+        // for (let i = 0; i < this.laneCount; i++) {
+        //     const text = "Lane: "+(1+i);
+        //     const text_width = context.measureText(text).width;
+        //     context.fillText("Lane: "+(1+i), this.getLaneCenter(i)-text_width/2, canvas.height*0);
+        // }
 
     }
 }
@@ -227,29 +322,38 @@ class Sensor {
         this.readings = [];
     }
 
-    update(trackBorders) {
+    update(collision_objects) {
         this.#castRays();
         this.readings = [];
         this.rays.forEach((ray) => {
-            this.readings.push(this.#getReadings(ray, trackBorders))
-            // let reading = this.#getReadings(ray, trackBorders);
-            // if (reading) { console.log(reading); }
-            // this.readings.push(reading);
+            let ray_readings = [];
+            collision_objects.forEach((borders) => {
+                const reading = this.#getReadings(ray, borders);
+                if (reading) { ray_readings.push(...reading); }
+            });
+            ray_readings.sort((prev, curr) => {
+                return (prev.offset > curr.offset) - (prev.offset < curr.offset);
+            });
+            if (ray_readings.length == 0) { ray_readings = null; }
+            this.readings.push(ray_readings);
         });
     }
 
-    #getReadings(ray, trackBorders) {
+    #getReadings(ray, borders) {
         const intersections = [];
-        trackBorders.forEach((border) => {
+        borders.forEach((border) => {
             const intersection = getIntersection(ray, border);
             if (intersection) {
                 intersections.push(intersection);
             }
         });
         if (intersections.length == 0) { return null; }
-        return intersections.sort((prev, curr) => {
-            return (prev[2] > curr[2]) - (prev[2] < curr[2]);
-        });
+        // if (intersections.length > 1) { console.log(intersections); }
+        // intersections.sort((prev, curr) => {
+        //     return (prev.offset > curr.offset) - (prev.offset < curr.offset);
+        // });
+        // if (intersections.length > 1) { console.log(intersections); exit();}
+        return intersections
         // return intersections.sort((prev, curr) => {
         //     const prev_distance = distance(ray[0], prev);
         //     const curr_distance = distance(ray[0], curr);
@@ -270,11 +374,12 @@ class Sensor {
 
     draw(context) {
         context.lineWidth = this.lineWidth;
+        // if (this.readings.length != this.rays.length) { console.log(this.readings); exit(); }
         for (let i = 0; i < this.rays.length; i++) {
             const ray = this.rays[i];
-            let end;
-            if (this.readings[i] == null) { end = [ray[1].x, ray[1].y]; }
-            else { end = [this.readings[i][0].x, this.readings[i][0].y]; }
+            let end = [ray[1].x, ray[1].y];;
+            if (this.readings[i]) { end = [this.readings[i][0].x, this.readings[i][0].y]; }
+
             context.strokeStyle = this.color;
             context.beginPath();
             context.moveTo(ray[0].x, ray[0].y);
@@ -283,8 +388,8 @@ class Sensor {
             
             context.strokeStyle = this.secondaryColor;
             context.beginPath();
-            context.moveTo(ray[1].x, ray[1].y);
-            context.lineTo(...end);
+            context.moveTo(...end);
+            context.lineTo(ray[1].x, ray[1].y);
             context.stroke();
         }
     }
