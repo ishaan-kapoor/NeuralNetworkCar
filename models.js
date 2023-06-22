@@ -156,7 +156,7 @@ class Controls {
     #setRandomListeners() {
         this.left = false;
         this.right = false;
-        this.forward = false;
+        this.forward = true;
         this.reverse = false;
         // setInterval(() => {
         //     this.left = Math.random() > 0.5;
@@ -183,129 +183,6 @@ class Controls {
                 case 'ArrowDown': this.reverse = false; break;
             }
         }
-    }
-}
-
-class Track {
-    constructor(x, width, laneCount=3, color='white', top=-2*(10**5), bottom=canvas.height+100) {
-        this.x = x;
-        this.width = width;
-        this.laneCount = laneCount;
-        this.color = color;
-
-        this.laneWidth = this.width / this.laneCount;
-        this.left = this.x - this.width / 2;
-        this.right = this.x + this.width / 2;
-        this.top = top;
-        this.bottom = bottom;
-
-        this.topLeft = {x: this.left, y: this.top};
-        this.topRight = {x: this.right,y:  this.top};
-        this.bottomLeft = {x: this.left, y: this.bottom};
-        this.bottomRight = {x: this.right,y:  this.bottom};
-
-        // this.borders = [
-        //     [this.topLeft, this.topRight],
-        //     [this.topRight, this.bottomRight],
-        //     [this.bottomRight, this.bottomLeft],
-        //     [this.bottomLeft, this.topLeft],
-        // ];
-
-        let right_inflection = {x: this.right+70, y: (this.bottom+this.top)/2};
-        let left_inflection = {x: this.left+70, y: (this.bottom+this.top)/2};
-
-        this.borders = [
-            // ! assumptions:
-            // * all borders are straight lines. i.e. if curves are needed, they are made up of multiple straight lines
-            // * all borders[i] and borders[i+1] are parallel
-            // * borders must have even number of entries
-            // * 1st 2 entries are the top and bottom borders
-            [this.topLeft, this.topRight],
-            [this.bottomRight, this.bottomLeft],
-            [this.topRight, right_inflection],
-            [this.topLeft, left_inflection],
-            [this.bottomRight, right_inflection],
-            [this.bottomLeft, left_inflection],
-        ];
-
-        // ! This corrects the order of points in borders
-        // * Left Border comes before Right Border
-        // * Top Point comes before Bottom Point in each Border
-        // * Has no other effect but to maintain order which is usefull in other functions.
-        for (let i=2; i<this.borders.length; i+=2) {
-            if (this.borders[i][0].y > this.borders[i][1].y) {
-                this.borders[i].reverse(); // [Top, Bottom]
-            }
-            if (this.borders[i+1][0].y > this.borders[i+1][1].y) {
-                this.borders[i+1].reverse(); // [Top, Bottom]
-            }
-            if (this.borders[i][0].x > this.borders[i+1][0].x) {
-                let tmp = this.borders[i];
-                this.borders[i] = this.borders[i+1];
-                this.borders[i+1] = tmp;
-                // Left, Right
-            }
-        }
-    }
-
-    getLaneCenter(lane, y=0) {
-        lane = Math.min(this.laneCount-1, lane);
-        lane = Math.max(0, lane);
-
-        for (let i=2; i<this.borders.length; i+=2) {
-
-            let angle = - Math.atan((this.borders[i][1].y-this.borders[i][0].y)/(this.borders[i][1].x-this.borders[i][0].x));
-            if (angle < 0) { angle += Math.PI/2; }
-            else { angle -= Math.PI/2; }
-            const top_x = leniar_interpolation(this.borders[i][0].x, this.borders[i+1][0].x, (lane+0.5)/this.laneCount);
-            const bottom_x = leniar_interpolation(this.borders[i][1].x, this.borders[i+1][1].x, (lane+0.5)/this.laneCount);
-            const top_y = this.borders[i][0].y;
-            const bottom_y = this.borders[i][1].y;
-            
-            if ((top_y <= y) && (y <= bottom_y)) {
-                return {
-                    x: ((y - bottom_y)*(top_x - bottom_x)/(top_y - bottom_y)) + bottom_x,
-                    angle: angle
-                }
-            }
-        }
-
-        return {x: leniar_interpolation(this.left, this.right, (lane+0.5)/this.laneCount), angle: 0};
-    }
-
-    draw(context) {
-        context.lineWidth = 5;
-        context.strokeStyle = this.color;
-
-        context.setLineDash([25, 15]);
-        for (let j = 2; j < this.borders.length; j+=2) {
-            for (let i = 1; i < this.laneCount; i++) {
-                const top_x = leniar_interpolation(this.borders[j][0].x, this.borders[j+1][0].x, i/this.laneCount);
-                const bottom_x = leniar_interpolation(this.borders[j][1].x, this.borders[j+1][1].x, i/this.laneCount);
-                const top_y = this.borders[j][0].y;
-                const bottom_y = this.borders[j][1].y;
-
-                context.beginPath();
-                context.moveTo(top_x, top_y);
-                context.lineTo(bottom_x, bottom_y);
-                context.stroke();
-            }
-        }
-
-        context.setLineDash([]);
-        this.borders.forEach((border) => {
-            context.beginPath();
-            context.moveTo(border[0].x, border[0].y);
-            context.lineTo(border[1].x, border[1].y);
-            context.stroke();
-        });
-
-        // for (let i = 0; i < this.laneCount; i++) {
-        //     const text = "Lane: "+(1+i);
-        //     const text_width = context.measureText(text).width;
-        //     context.fillText("Lane: "+(1+i), this.getLaneCenter(i)-text_width/2, canvas.height*0);
-        // }
-
     }
 }
 
@@ -361,7 +238,6 @@ class Sensor {
         // });
     }
 
-
     #castRays() {
         this.rays = [];
         for (let i = 0; i < this.rayCount; i++) {
@@ -394,4 +270,150 @@ class Sensor {
         }
     }
 
+}
+
+class Track {
+    constructor(x, width, laneCount=3, color='white', top=-2*(10**4), bottom=canvas.height+100) {
+        this.x = x;
+        this.width = width;
+        this.laneCount = laneCount;
+        this.color = color;
+
+        this.laneWidth = this.width / this.laneCount;
+        this.left = this.x - this.width / 2;
+        this.right = this.x + this.width / 2;
+        this.top = top;
+        this.bottom = bottom;
+
+        this.topLeft = {x: this.left, y: this.top};
+        this.topRight = {x: this.right,y:  this.top};
+        this.bottomLeft = {x: this.left, y: this.bottom};
+        this.bottomRight = {x: this.right,y:  this.bottom};
+
+        // this.borders = [
+        //     [this.topLeft, this.topRight],
+        //     [this.topRight, this.bottomRight],
+        //     [this.bottomRight, this.bottomLeft],
+        //     [this.bottomLeft, this.topLeft],
+        // ];
+
+        let right_curve_start = {x: this.right+70, y: leniar_interpolation(this.top, this.bottom, 0.75)};
+        let left_curve_start = {x: this.left+70, y: leniar_interpolation(this.top, this.bottom, 0.75)};
+        let left_curve_end = {x: this.left-70, y: leniar_interpolation(this.top, this.bottom, 0.95)};
+        let right_curve_end = {x: this.right-70, y: leniar_interpolation(this.top, this.bottom, 0.95)};
+
+
+        this.borders = [
+            // ! assumptions:
+            // * all borders are straight lines. i.e. if curves are needed, they are made up of multiple straight lines
+            // * all borders[i] and borders[i+1] are parallel
+            // * borders must have even number of entries
+            // * 1st 2 entries are the top and bottom borders
+            [this.topLeft, this.topRight],
+            [this.bottomRight, this.bottomLeft],
+            [this.topRight, right_curve_start],
+            [this.topLeft, left_curve_start],
+            // [this.bottomRight, right_curve_end],
+            // [this.bottomLeft, left_curve_end],
+        ];
+
+        left_curve_end = this.#makeCurveBorders(left_curve_start, left_curve_end);
+        right_curve_end = {x: left_curve_end.x+this.width, y: left_curve_end.y};
+
+        // this.borders.push([right_curve_end, right_curve_start]);
+        // this.borders.push([left_curve_start, left_curve_end]);
+        this.borders.push([right_curve_end, this.bottomRight]);
+        this.borders.push([this.bottomLeft, left_curve_end]);
+
+        // ! This corrects the order of points in borders
+        // * Left Border comes before Right Border
+        // * Top Point comes before Bottom Point in each Border
+        // * Has no other effect but to maintain order which is usefull in other functions.
+        for (let i=2; i<this.borders.length; i+=2) {
+            if (this.borders[i][0].y > this.borders[i][1].y) {
+                this.borders[i].reverse(); // [Top, Bottom]
+            }
+            if (this.borders[i+1][0].y > this.borders[i+1][1].y) {
+                this.borders[i+1].reverse(); // [Top, Bottom]
+            }
+            if (this.borders[i][0].x > this.borders[i+1][0].x) {
+                let tmp = this.borders[i];
+                this.borders[i] = this.borders[i+1];
+                this.borders[i+1] = tmp;
+                // Left, Right
+            }
+        }
+    }
+
+    #makeCurveBorders(start, end, scale={x:60,y:300}, step=20) {
+        let y;
+        let x2;
+        for (y=start.y; y<=end.y-step; y+=step) {
+            const x1 = Math.sin((y-start.y)/scale.y)*scale.x;
+            x2 = Math.sin(((y-start.y)+step)/scale.y)*scale.x;
+            this.borders.push([{x: start.x+x1, y: y}, {x: start.x+x2, y: y+step}]);
+            this.borders.push([{x: start.x+this.width+x1, y: y}, {x: start.x+this.width+x2, y: y+step}]);
+        }
+        return {x: start.x+x2, y: y};
+    }
+
+    getLaneCenter(lane, y=0) {
+        lane = Math.min(this.laneCount-1, lane);
+        lane = Math.max(0, lane);
+
+        for (let i=2; i<this.borders.length; i+=2) {
+
+            let angle = - Math.atan((this.borders[i][1].y-this.borders[i][0].y)/(this.borders[i][1].x-this.borders[i][0].x));
+            if (angle < 0) { angle += Math.PI/2; }
+            else { angle -= Math.PI/2; }
+            const top_x = leniar_interpolation(this.borders[i][0].x, this.borders[i+1][0].x, (lane+0.5)/this.laneCount);
+            const bottom_x = leniar_interpolation(this.borders[i][1].x, this.borders[i+1][1].x, (lane+0.5)/this.laneCount);
+            const top_y = this.borders[i][0].y;
+            const bottom_y = this.borders[i][1].y;
+            
+            if ((top_y <= y) && (y <= bottom_y)) {
+                return {
+                    x: ((y - bottom_y)*(top_x - bottom_x)/(top_y - bottom_y)) + bottom_x,
+                    angle: angle
+                }
+            }
+        }
+
+        return {x: leniar_interpolation(this.left, this.right, (lane+0.5)/this.laneCount), angle: 0};
+    }
+
+    draw(context) {
+        context.lineWidth = 5;
+        context.strokeStyle = this.color;
+
+        context.setLineDash([2, 20]);
+        for (let j = 2; j < this.borders.length; j+=2) {
+            for (let i = 1; i < this.laneCount; i++) {
+                const top_x = leniar_interpolation(this.borders[j][0].x, this.borders[j+1][0].x, i/this.laneCount);
+                const bottom_x = leniar_interpolation(this.borders[j][1].x, this.borders[j+1][1].x, i/this.laneCount);
+                const top_y = this.borders[j][0].y;
+                const bottom_y = this.borders[j][1].y;
+
+                context.beginPath();
+                context.moveTo(top_x, top_y);
+                context.lineTo(bottom_x, bottom_y);
+                context.stroke();
+            }
+        }
+
+        context.setLineDash([]);
+        this.borders.forEach((border) => {
+            context.beginPath();
+            context.moveTo(border[0].x, border[0].y);
+            context.lineTo(border[1].x, border[1].y);
+            context.stroke();
+        });
+
+        // for (let i = 0; i < this.laneCount; i++) {
+        //     const text = "Lane: "+(1+i);
+        //     const text_width = context.measureText(text).width;
+        //     context.fillText("Lane: "+(1+i), this.getLaneCenter(i)-text_width/2, canvas.height*0);
+        // }
+
+    }
 }
