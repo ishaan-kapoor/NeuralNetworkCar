@@ -1,11 +1,29 @@
 body {
     background-color: #121212;
     margin: 0%;
-    text-align: center;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
+#buttons {
+    display: flex;
+    flex-direction: column;
+}
+button {
+    border: none;
+    border-radius: 5px;
+    padding: 5px;
+    margin: 5px;
+    cursor: pointer;
+}
+button:hover {
+    background: blue;
+}
+
 #roadCanvas {
     background-color: gray;
+    margin: 10px;
 }
 #networkCanvas {
     background-color: black;

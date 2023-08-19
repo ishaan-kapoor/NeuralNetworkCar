@@ -1,5 +1,5 @@
 function leniar_interpolation(start, end, percent) {
-    if (percent == Infinity) { percent = 0.5; }
+    if ((percent == Infinity) || (isNaN(percent))) { percent = 0.5; }
     return (1-percent)*start + percent*end;
 }
 
