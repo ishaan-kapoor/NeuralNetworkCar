@@ -1,6 +1,6 @@
 
 class Car {
-    constructor(x, y, width, height, dummy=false, AI=false, color='black', secondaryColor='red', maxSpeed=5, maxReverseSpeed=2, angle=0) {
+    constructor(x, y, width, height, dummy=false, AI=false, draw_sensors=false, color='black', secondaryColor='red', maxSpeed=5, maxReverseSpeed=2, angle=0) {
         this.x = x;
         this.y = y;
         this.height = height;
@@ -12,6 +12,7 @@ class Car {
 
         this.dummy = dummy;
         this.AI = (!dummy) && AI;
+        this.draw_sensors = draw_sensors;
         this.angle = angle;
         this.angleChange = 0.005;
         this.speed = 0
@@ -30,9 +31,8 @@ class Car {
             this.controls = {forward: false, reverse: false, left: false, right: false};
         }
         if (!dummy) {
-            // this.sensor = new Sensor(this, 30, 200, 3.14)
-            this.sensor = new Sensor(this)
-            this.brain = new NeuralNetwork([this.sensor.rayCount, 2, 4]);
+            this.sensor = new Sensor(this, 9, 350, 0.75*Math.PI)
+            this.brain = new NeuralNetwork([this.sensor.rayCount, 1, 4]);
         }
     }
 
@@ -122,7 +122,7 @@ class Car {
             if (collision != null) {
                 this.secondaryColor = this.color;
                 this.color = 'red';
-                console.log("Collosion!");
+                // console.log("Collosion!");
                 this.damaged = true;
             }
         }
@@ -156,7 +156,7 @@ class Car {
             context.fill();
         }
 
-        if (this.sensor) { this.sensor.draw(context); }
+        if (this.sensor && this.draw_sensors) { this.sensor.draw(context); }
     }
 }
 
